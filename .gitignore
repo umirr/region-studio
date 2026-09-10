@@ -1,0 +1,10 @@
+node_modules/
+ui/vendor/
+ui/models/
+ui/sample.png
+dist/
+*.exe
+*.zip
+.env*
+*secret*
+*invitation*
