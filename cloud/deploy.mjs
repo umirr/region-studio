@@ -33,7 +33,9 @@ try{
    for(let i=0;i<12;i++){try{response=await upload();if(response.status===201)break;}catch{}await sleep(5000);}
    assert.equal(response?.status,201,'First upload must create an R2 object');
    assert.equal((await response.json()).stored,true);
-   assert.equal((await upload()).status,200,'Retry must be idempotent');
+   // Secret updates propagate across edge instances; a briefly stale instance may reject the new code.
+   let retry;for(let i=0;i<12;i++){retry=await upload();if(retry.status!==401)break;await sleep(5000);}
+   assert.equal(retry.status,200,'Retry must be idempotent');
    assert.equal((await fetch(base+'/upload',{method:'POST',headers:{...headers,'X-Upload-Code':'invalid'},body})).status,401);
    assert.equal((await fetch(base+'/submissions/'+id+'.zip')).status,404);
    console.log('LIVE TEST PASS: R2 upload 201, duplicate 200, invalid invitation 401, public download 404');
