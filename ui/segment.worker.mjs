@@ -5,7 +5,7 @@ self.onmessage=async({data:m})=>{try{
     if(!model){
       self.postMessage({type:'status',text:'AI 모델 다운로드 중 · 첫 실행은 시간이 걸립니다'});
       const lib=await import('./vendor/transformers.web.min.js');
-      ({Tensor,RawImage}=lib);lib.env.allowLocalModels=true;lib.env.allowRemoteModels=false;lib.env.localModelPath=new URL('./models/',import.meta.url).href;lib.env.backends.onnx.wasm.wasmPaths=new URL('./vendor/',import.meta.url).href;lib.env.backends.onnx.wasm.numThreads=1;
+      ({Tensor,RawImage}=lib);lib.env.allowLocalModels=true;lib.env.allowRemoteModels=false;lib.env.localModelPath=new URL('./models/',import.meta.url).href;lib.env.backends.onnx.wasm.wasmPaths=new URL('./vendor/',import.meta.url).href;lib.env.backends.onnx.wasm.numThreads=self.crossOriginIsolated?Math.max(1,Math.min(4,m.threads||(navigator.hardwareConcurrency||2)-1)):1;
       processor=await lib.AutoProcessor.from_pretrained(MODEL);
       model=await lib.SamModel.from_pretrained(MODEL,{device:'wasm',dtype:'fp32'});
     }
