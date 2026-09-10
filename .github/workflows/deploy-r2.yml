@@ -1,0 +1,41 @@
+name: Deploy R2 upload server
+on:
+  push:
+    branches: [main]
+    paths: ['cloud/**', '.github/workflows/deploy-r2.yml']
+  workflow_dispatch:
+    inputs:
+      bootstrap_test:
+        description: 'Run live upload test (temporarily pauses beta invitations)'
+        type: boolean
+        default: false
+permissions:
+  contents: read
+concurrency:
+  group: region-studio-production
+  cancel-in-progress: false
+jobs:
+  deploy:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: cloud
+    env:
+      CLOUDFLARE_ACCOUNT_ID: 7ce4c941f393aeecf005e6c431a3af04
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      INVITE_SHA256: ${{ secrets.INVITE_SHA256 }}
+      WRANGLER_SEND_METRICS: 'false'
+      BOOTSTRAP_TEST: ${{ inputs.bootstrap_test || 'false' }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-audit --no-fund
+      - run: node deploy.mjs
+      - name: Restore production invitation after a failed or canceled deployment
+        if: failure() || cancelled()
+        run: node deploy.mjs --restore
+
