@@ -45,4 +45,3 @@ try{
 let ready=false;for(let i=0;i<12;i++){try{ready=await health();if(ready)break;}catch{}await sleep(5000);}
 assert.equal(ready,true,'Production server must be configured');
 console.log('DEPLOY PASS: '+base+'/health');
-

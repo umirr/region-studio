@@ -38,4 +38,3 @@ jobs:
       - name: Restore production invitation after a failed or canceled deployment
         if: failure() || cancelled()
         run: node deploy.mjs --restore
-

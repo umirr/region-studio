@@ -19,6 +19,9 @@ export function selectBounded(input,w,h,points,edge,{strength=65,radius=35,gap=1
  if(!positives.length)return {mask:input.slice(),confidence:0,accepted:false};
  const barrier=barrierMap(edge,w,h,strength,gap),allowed=new Uint8Array(w*h),r=Math.max(8,Math.min(w,h)*radius/100),r2=r*r;
  for(const p of positives){const sx=p%w,sy=Math.floor(p/w);for(let y=Math.max(0,Math.ceil(sy-r));y<=Math.min(h-1,Math.floor(sy+r));y++)for(let x=Math.max(0,Math.ceil(sx-r));x<=Math.min(w-1,Math.floor(sx+r));x++)if((x-sx)**2+(y-sy)**2<=r2)allowed[y*w+x]=1;}
+ // Exclusion seeds compete spatially with inclusion seeds at 1.3x weight.
+ // Inclusion coordinates, radius and model prompts remain unchanged.
+ if(negatives.size)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(!allowed[p])continue;let positiveDistance=Infinity,negativeDistance=Infinity;for(const q of positives)positiveDistance=Math.min(positiveDistance,(x-q%w)**2+(y-Math.floor(q/w))**2);for(const q of negatives)negativeDistance=Math.min(negativeDistance,(x-q%w)**2+(y-Math.floor(q/w))**2);if(negativeDistance<=positiveDistance*(1.3*1.3))allowed[p]=0;}
  const queue=new Int32Array(w*h),seen=new Uint8Array(w*h);let head=0,tail=0,perimeter=0,sealed=0,touchesLimit=false;
  const push=p=>{if(!seen[p]&&allowed[p]&&!barrier[p]&&!negatives.has(p)&&(lineOnly||input[p])){seen[p]=1;queue[tail++]=p;out[p]=255;}};
  for(const p of positives){if(barrier[p]){for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=p%w+dx,y=Math.floor(p/w)+dy;if(x>=0&&x<w&&y>=0&&y<h)push(y*w+x);}}else push(p);}
