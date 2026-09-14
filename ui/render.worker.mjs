@@ -1,0 +1,3 @@
+import {compose,edgeCoverage} from './core.mjs';
+let source,w,h;
+self.onmessage=({data:m})=>{try{if(m.source){source=new Uint8ClampedArray(m.source);w=m.w;h=m.h;}const cache=new WeakMap(),result=compose(source,m.layers,cache,w,h);let overlay=null;if(m.overlay&&m.layers[m.active]){const l=m.layers[m.active],coverage=cache.get(l.mask)?.coverage||edgeCoverage(l.mask,w,h);overlay=new Uint8ClampedArray(w*h*4);for(let p=0;p<coverage.length;p++)if(coverage[p]){overlay[p*4]=72;overlay[p*4+1]=225;overlay[p*4+2]=205;overlay[p*4+3]=Math.round(75*coverage[p]/255);}}self.postMessage({image:m.image,result,overlay},[result.buffer,...(overlay?[overlay.buffer]:[])]);}catch(e){self.postMessage({image:m.image,error:e.message});}};
