@@ -1,6 +1,7 @@
 const {app,BrowserWindow,ipcMain,dialog,session,nativeImage}=require('electron');
 const http=require('node:http'),fs=require('node:fs/promises'),path=require('node:path'),crypto=require('node:crypto');
 const {Store,atomic}=require('./storage.cjs');
+const {Preferences}=require('./preferences.cjs');
 const {registerSubmission}=require('./submission.cjs');
 const {registerCloudUpload}=require('./cloud-upload.cjs');
 app.disableHardwareAcceleration();
@@ -27,7 +28,7 @@ app.whenReady().then(async()=>{
  registerCloudUpload({handle,app,atomic});
  registerSubmission({handle,store,dialog,getWindow:()=>window,app,nativeImage,atomic});
  handle('rescan',()=>store.folder?store.open(store.folder):null);handle('cache-read',id=>store.cacheRead(id));handle('cache-write',(id,data)=>store.cacheWrite(id,data));
- handle('preferences-read',async()=>{try{return JSON.parse(await fs.readFile(path.join(app.getPath('userData'),'preferences.json'),'utf8'));}catch{return {};}});handle('preferences-save',async p=>{if(!p||!['#ffffff','#000000'].includes(p.color))throw Error('잘못된 기본 색상');await atomic(path.join(app.getPath('userData'),'preferences.json'),JSON.stringify({color:p.color}));});
+ const preferences=new Preferences(app.getPath('userData'));handle('preferences-read',()=>preferences.read());handle('preferences-save',p=>preferences.save(p));
  handle('read',id=>store.read(id));handle('save',(id,s)=>store.save(id,s));
  handle('destination',async kind=>{if(!['dataset','results'].includes(kind))throw Error('잘못된 내보내기');const r=await dialog.showOpenDialog(window,{title:'내보낼 위치 선택',properties:['openDirectory','createDirectory']});if(r.canceled)return null;const token=crypto.randomUUID(),dir=path.join(r.filePaths[0],'Region-Studio-'+kind+'-'+new Date().toISOString().replace(/[:.]/g,'-'));await fs.mkdir(dir,{recursive:true});destinations.set(token,{kind,dir});return token;});
  handle('write',async(token,id,p)=>{const d=destinations.get(token),item=store.item(id);if(!d)throw Error('내보내기 위치가 없습니다.');if(d.kind==='results'&&p.skipped){const state=await store.read(id);if(!state?.skipped)throw Error('스킵 상태가 아닙니다.');await fs.copyFile(item.path,path.join(d.dir,item.name));return;}if(d.kind==='results'){await atomic(path.join(d.dir,path.parse(item.name).name+'-'+id.slice(0,6)+'.png'),png(p.image));return;}
