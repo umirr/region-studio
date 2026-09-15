@@ -9,11 +9,12 @@ main{grid-template-rows:minmax(0,1fr)}.workspace,.library,aside{min-height:0}#vi
 
 body{height:100dvh;display:flex;flex-direction:column;overflow:hidden}header{height:auto;min-height:74px;flex-shrink:0}.brand{flex-shrink:0}.actions{justify-content:flex-end}#libraryBar,#prepPanel{flex-shrink:0}main{height:auto;flex:1;min-height:0}.canvas-toolbar{flex-shrink:0}
 
-/* Photoshop-style single-line options bar, across the full application width. */
-body>.refinement{display:flex;flex-flow:row nowrap;align-items:center;gap:12px;flex:0 0 auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #353e4d;background:#202630;overflow-x:auto;overflow-y:hidden;white-space:nowrap;min-height:49px;font-size:12px}
-body>.refinement>.toolbar-title{display:list-item;flex:0 0 auto;cursor:pointer;margin-right:4px}
-body>.refinement>label{display:flex;align-items:center;gap:5px;margin:0;flex:0 0 auto;white-space:nowrap}
-body>.refinement output{float:none;min-width:25px;text-align:right;font-variant-numeric:tabular-nums}
-body>.refinement input[type=range]{display:inline-block;width:55px;margin:0;flex:0 0 55px}
+/* Full-width, stable single-row options. Extra space belongs to the sliders. */
+body>.refinement{display:flex;flex-flow:row nowrap;align-items:center;gap:8px;flex:0 0 auto;margin:0;padding:8px 12px;border:0;border-bottom:1px solid #353e4d;background:#202630;overflow-x:auto;overflow-y:hidden;white-space:nowrap;min-height:49px;font-size:12px}
+body>.refinement>.toolbar-title{display:block;flex:0 0 auto;margin-right:4px;font-weight:600}
+body>.refinement>label{display:flex;align-items:center;gap:6px;margin:0;padding:0 8px;flex:1 0 190px;min-width:190px;height:32px;border-left:1px solid #414b5b;white-space:nowrap}
+body>.refinement>label.check{flex:0 0 auto;min-width:0;padding:0;border:0}
+body>.refinement output{order:2;display:block;float:none;flex:0 0 38px;width:38px;min-width:38px;max-width:38px;text-align:right;font-variant-numeric:tabular-nums}
+body>.refinement input[type=range]{order:1;display:block;width:0;min-width:100px;margin:0;flex:1 1 100px}
 body>.refinement input[type=checkbox]{margin:0}
 body>.refinement button{flex:0 0 auto;width:auto;padding:6px 9px;font-size:12px;border-radius:4px;margin:0}
