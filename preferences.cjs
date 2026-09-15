@@ -1,5 +1,5 @@
 const fs=require('node:fs/promises'),path=require('node:path');const {atomic}=require('./storage.cjs');
-const ranges={brush:[2,300],edgeStrength:[0,100],anchorRadius:[5,100],fillConfidence:[60,100],lineGap:[0,4],smoothAmount:[1,6],strength:[0,100]};
+const ranges={libraryWidth:[150,900],toolsWidth:[220,900],brush:[2,300],edgeStrength:[0,100],anchorRadius:[5,100],fillConfidence:[60,100],lineGap:[0,4],smoothAmount:[1,6],strength:[0,100]};
 class Preferences{
  constructor(root){this.file=path.join(root,'settings-v1.json');this.legacy=path.join(root,'preferences.json');this.queue=Promise.resolve();}
  async json(file){try{return JSON.parse(await fs.readFile(file,'utf8'));}catch(e){if(e.code==='ENOENT')return {};throw e;}}
