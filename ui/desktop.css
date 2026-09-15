@@ -17,4 +17,9 @@ body>.refinement>label.check{flex:0 0 auto;min-width:0;padding:0;border:0}
 body>.refinement output{order:2;display:block;float:none;flex:0 0 38px;width:38px;min-width:38px;max-width:38px;text-align:right;font-variant-numeric:tabular-nums}
 body>.refinement input[type=range]{order:1;display:block;width:0;min-width:100px;margin:0;flex:1 1 100px}
 body>.refinement input[type=checkbox]{margin:0}
-body>.refinement button{flex:0 0 auto;width:auto;padding:6px 9px;font-size:12px;border-radius:4px;margin:0}
+body>.refinement button{flex:0 0 auto;width:auto;padding:6px 9px;font-size:12px;border-radius:4px;margin:0}main{grid-template-columns:205px 8px minmax(0,1fr) 8px 285px;overflow:hidden}
+.panel-resize{cursor:col-resize;touch-action:none;background:#242c39;min-height:0;border-inline:1px solid #384357}
+.panel-resize:hover,.panel-resize:focus-visible{background:#7498ff;outline:none}
+body.resizing{cursor:col-resize;user-select:none}body.resizing #viewport{pointer-events:none}
+aside>#smooth,aside>#refine{display:block;margin-top:8px}
+.canvas-toolbar{overflow-x:auto}.canvas-toolbar>div{flex:0 0 auto;white-space:nowrap}#filename{min-width:0;flex:1 1 auto}
