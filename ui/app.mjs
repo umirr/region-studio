@@ -4,6 +4,7 @@ import {compose,outsideChanges,brush,edgeCoverage} from './core.mjs';
 import {refineMask} from './refine.mjs';
 import {setupViewport} from './viewport.mjs';
 import {setupPanels} from './panels.mjs';
+import {encodeResult} from './result-file.mjs';
 import {setupSubmission} from './submission-ui.mjs';
 const $=id=>document.getElementById(id),api=window.desktop,canvas=$('canvas'),ctx=canvas.getContext('2d',{willReadFrequently:true}),marks=$('marks'),mctx=marks.getContext('2d');
 let preferenceSave=Promise.resolve(),preferenceTimer,defaultStrength=1;let defaultColor='#ffffff';
@@ -80,7 +81,35 @@ $('newLayer').onclick=()=>{if(!source||busy)return;if(layers.length>=30){status(
 $('deleteLayer').onclick=()=>{if(!current()||busy)return;snapshot();layers.splice(active,1);if(!layers.length)layers.push(fresh());active=Math.min(active,layers.length-1);resetCandidates();changed();controls();render();};
 $('approve').onclick=async()=>{if(!source||busy)return;if(!layers.some(l=>l.mask.some(x=>x))){status('확정할 마스크가 없습니다.');return;}skipped=false;approved=!approved;dirty=true;revision++;approvalUI();try{await flush();status(approved?'학습용 정답으로 저장했습니다.':'정답 확정을 해제했습니다.');}catch(e){fail(e);}};
 function png(data,width,height){const c=document.createElement('canvas');c.width=width;c.height=height;c.getContext('2d').putImageData(new ImageData(data,width,height),0,0);return c.toDataURL('image/png');}
-async function exportItems(kind){if(exporting||busy||navigating)return;try{await flush();const items=files.filter(f=>kind==='dataset'?f.status==='approved':f.status!=='new');if(!items.length){status(kind==='dataset'?'정답 확정한 이미지가 없습니다.':'저장된 작업이 없습니다.');return;}const token=await api.destination(kind);if(!token)return;exporting=true;document.body.classList.add('exporting');const manifest=[];for(let i=0;i<items.length;i++){const f=items[i],s=await api.read(f.id);if(!s)continue;const ls=unpack(s);status(`내보내는 중 ${i+1} / ${items.length}`);if(kind==='results'&&s.skipped){await api.write(token,f.id,{skipped:true});continue;}if(kind==='results'){const p=await pixels(f.id);await api.write(token,f.id,{image:png(compose(p.data,ls,undefined,p.width,p.height),p.width,p.height)});}else{const nonempty=ls.filter(l=>l.mask.some(x=>x));const masks=nonempty.map(l=>{const rgba=new Uint8ClampedArray(s.width*s.height*4);for(let p=0;p<l.mask.length;p++){rgba[p*4]=rgba[p*4+1]=rgba[p*4+2]=l.mask[p]?255:0;rgba[p*4+3]=255;}return png(rgba,s.width,s.height);});await api.write(token,f.id,{masks});manifest.push({id:f.id,annotation:f.id+'/annotation.json',split:parseInt(f.id.slice(0,2),16)%5===0?'validation':'train'});}}const dir=await api.finish(token,{images:manifest});status('내보내기 완료: '+dir);}catch(e){fail(e);}finally{exporting=false;document.body.classList.remove('exporting');}}
+const finalizeAll=document.createElement('button');finalizeAll.id='finalizeAll';finalizeAll.textContent='전체 일괄처리';finalizeAll.title='전체 이미지: 결과가 변경되면 정답 확정, 원본과 같으면 스킵';$('batch').before(finalizeAll);
+finalizeAll.onclick=async()=>{
+ if(!files.length||busy||exporting||navigating||drag)return;
+ exporting=true;setBusy(true);
+ const controlsToLock=[...document.querySelectorAll('button,input,select')].map(e=>[e,e.disabled]);controlsToLock.forEach(([e])=>e.disabled=true);
+ const checker=new Worker('./batch-result.worker.mjs',{type:'module'});
+ let done=0,accepted=0,skips=0;const failures=[];
+ $('prepPanel').hidden=false;$('prepProgress').max=files.length;$('prepProgress').value=0;
+ try{
+  await flush();
+  for(const f of files){
+   $('prepText').textContent=`전체 일괄처리 ${done} / ${files.length}장 · ${f.name}`;
+   try{
+    const saved=await api.read(f.id),p=await pixels(f.id);
+    const state=saved||{version:2,width:p.width,height:p.height,layers:[],metrics:{}};
+    const decoded=unpack(state);
+    const changed=decoded.some(l=>l.visible!==false&&l.strength>0&&l.mask.some(v=>v))?await new Promise((resolve,reject)=>{checker.onmessage=({data:r})=>r.error?reject(Error(r.error)):resolve(r.changed);checker.onerror=e=>reject(Error(e.message));checker.postMessage({source:p.data,width:p.width,height:p.height,layers:decoded});}):false;
+    state.approved=changed;state.skipped=!changed;
+    await api.save(f.id,state);
+    f.status=changed?'approved':'skipped';if(changed)accepted++;else skips++;
+    if(f.id===id){approved=changed;skipped=!changed;dirty=false;approvalUI();}
+   }catch(e){failures.push(f.name+': '+(e.message||e));}
+   done++;$('prepProgress').value=done;
+  }
+  list();const message=`전체 일괄처리 완료 · 정답 확정 ${accepted}장 · 스킵 ${skips}장 · 실패 ${failures.length}장`;
+  $('prepText').textContent=message;$('prepText').title=failures.join('\n');status(message+(failures.length?' · '+failures[0]:''));$('saveStatus').textContent=message;
+ }catch(e){fail(e);}finally{checker.terminate();exporting=false;setBusy(false);controlsToLock.forEach(([e,disabled])=>e.disabled=disabled);setBusy(false);}
+};
+async function exportItems(kind){if(exporting||busy||navigating)return;try{await flush();const items=files.filter(f=>kind==='dataset'?f.status==='approved':f.status!=='new');if(!items.length){status(kind==='dataset'?'정답 확정한 이미지가 없습니다.':'저장된 작업이 없습니다.');return;}const token=await api.destination(kind);if(!token)return;exporting=true;document.body.classList.add('exporting');const manifest=[];for(let i=0;i<items.length;i++){const f=items[i],s=await api.read(f.id);if(!s)continue;const ls=unpack(s);status(`내보내는 중 ${i+1} / ${items.length}`);if(kind==='results'&&s.skipped){await api.write(token,f.id,{skipped:true});continue;}if(kind==='results'){const p=await pixels(f.id);await api.write(token,f.id,{image:encodeResult(compose(p.data,ls,undefined,p.width,p.height),p.width,p.height,f.name)});}else{const nonempty=ls.filter(l=>l.mask.some(x=>x));const masks=nonempty.map(l=>{const rgba=new Uint8ClampedArray(s.width*s.height*4);for(let p=0;p<l.mask.length;p++){rgba[p*4]=rgba[p*4+1]=rgba[p*4+2]=l.mask[p]?255:0;rgba[p*4+3]=255;}return png(rgba,s.width,s.height);});await api.write(token,f.id,{masks});manifest.push({id:f.id,annotation:f.id+'/annotation.json',split:parseInt(f.id.slice(0,2),16)%5===0?'validation':'train'});}}const dir=await api.finish(token,{images:manifest});status('내보내기 완료: '+dir);}catch(e){fail(e);}finally{exporting=false;document.body.classList.remove('exporting');}}
 $('batch').onclick=()=>exportItems('results');$('dataset').onclick=()=>exportItems('dataset');
 setupSubmission({api,button:$('beta'),getFiles:()=>files,flush,pixels,png,unpack,lock:v=>{exporting=v;},blocked:()=>busy||exporting||navigating,status});
 api.onClose(async()=>{try{if(busy||exporting)throw Error('AI 분석 또는 내보내기가 끝난 뒤 닫아주세요.');await flush();api.closeReady();}catch(e){api.closeFailed(e.message);}});
