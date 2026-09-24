@@ -4,9 +4,8 @@ const {Store,atomic}=require('./storage.cjs');
 const {Preferences}=require('./preferences.cjs');
 const {registerSubmission}=require('./submission.cjs');
 const {registerCloudUpload}=require('./cloud-upload.cjs');
-app.disableHardwareAcceleration();
 if(!app.isPackaged&&process.env.REGION_STUDIO_TEST_DATA){app.commandLine.appendSwitch('in-process-gpu');app.commandLine.appendSwitch('no-sandbox');}
-let window,server,origin,store,closing=false;const prefix='/'+crypto.randomBytes(24).toString('hex'),destinations=new Map();
+let window,server,origin,store,closing=false;const prefix='/'+crypto.randomBytes(24).toString('hex'),destinations=new Map(),thumbnails=new Map();
 if(!app.isPackaged&&process.env.REGION_STUDIO_TEST_DATA)app.setPath('userData',process.env.REGION_STUDIO_TEST_DATA);
 const mime={'.png':'image/png','.jpg':'image/jpeg','.jpeg':'image/jpeg','.webp':'image/webp','.html':'text/html; charset=utf-8','.css':'text/css','.mjs':'text/javascript','.js':'text/javascript','.json':'application/json','.wasm':'application/wasm','.onnx':'application/octet-stream'};
 function check(event){if(event.sender!==window.webContents||!event.senderFrame?.url.startsWith(origin+prefix+'/'))throw Error('허용되지 않은 요청');}
@@ -18,9 +17,9 @@ app.whenReady().then(async()=>{
  server=http.createServer(async(req,res)=>{try{
   if(req.method!=='GET'){res.writeHead(405).end();return;}const url=new URL(req.url,'http://localhost');if(!url.pathname.startsWith(prefix+'/')){res.writeHead(404).end();return;}
   const relative=decodeURIComponent(url.pathname.slice(prefix.length+1));let data,type;
-  if(relative.startsWith('image/')||relative.startsWith('thumb/')){const id=relative.split('/')[1],item=store.item(id);if(relative.startsWith('thumb/')){const im=nativeImage.createFromPath(item.path);data=im.resize({width:100}).toPNG();type='image/png';}else{data=await fs.readFile(item.path);type=mime[path.extname(item.path).toLowerCase()];}}
+  if(relative.startsWith('image/')||relative.startsWith('thumb/')){const id=relative.split('/')[1],item=store.item(id);if(relative.startsWith('thumb/')){const key=id+':'+url.searchParams.get('v');data=thumbnails.get(key);if(!data){const im=nativeImage.createFromPath(item.path);data=im.resize({width:100}).toPNG();thumbnails.set(key,data);if(thumbnails.size>400)thumbnails.delete(thumbnails.keys().next().value);}type='image/png';}else{data=await fs.readFile(item.path);type=mime[path.extname(item.path).toLowerCase()];}}
   else{const root=path.join(__dirname,'ui'),file=path.resolve(root,relative||'index.html');if(!file.startsWith(root+path.sep))throw Error('경로 오류');data=await fs.readFile(file);type=mime[path.extname(file)]||'application/octet-stream';}
-  res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cache-Control','no-store');res.setHeader('Content-Type',type);res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");res.end(data);
+  res.setHeader('Cross-Origin-Opener-Policy','same-origin');res.setHeader('Cross-Origin-Embedder-Policy','require-corp');res.setHeader('Cache-Control',(relative.startsWith('image/')||relative.startsWith('thumb/'))&&url.searchParams.has('v')?'private, max-age=3600':'no-store');res.setHeader('Content-Type',type);res.setHeader('X-Content-Type-Options','nosniff');res.setHeader('Content-Security-Policy',"default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; worker-src 'self' blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'");res.end(data);
  }catch(e){res.writeHead(404).end('Not found');}});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
  window=new BrowserWindow({show:app.isPackaged||!process.env.REGION_STUDIO_TEST_DATA,width:1500,height:1000,minWidth:1000,minHeight:700,title:'Region Studio',backgroundColor:'#171d28',webPreferences:{preload:path.join(__dirname,'preload.cjs'),backgroundThrottling:app.isPackaged||!process.env.REGION_STUDIO_TEST_DATA,contextIsolation:true,nodeIntegration:false,sandbox:true}});
