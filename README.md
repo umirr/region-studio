@@ -1,10 +1,10 @@
-# Region Studio Desktop 1.0.0
+# Region Studio Desktop 1.0.1
 
 Windows용 오프라인 일러스트 영역 선택 및 재채색 앱입니다. 모델과 실행 환경이 포함되어 있으며 GPT 계정/API 키 및 인터넷 연결이 필요하지 않습니다.
 
 ## 설치와 작업
 
-`Region-Studio-Setup-1.0.0.exe`를 실행하여 설치한 다음 바탕 화면의 Region Studio를 엽니다.
+`Region-Studio-Setup-1.0.1.exe`를 실행하여 설치한 다음 바탕 화면의 Region Studio를 엽니다.
 
 1. **폴더 열기**에서 PNG/JPG/WebP 이미지가 들어 있는 폴더를 선택합니다. 현재는 선택한 폴더 바로 아래 파일을 읽습니다.
 2. 목록에서 이미지 선택 → **AI 분석** → 포함/제외 클릭으로 영역 지정 → 후보 또는 브러시로 보정합니다.

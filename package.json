@@ -1,6 +1,6 @@
 {
   "name": "region-studio-desktop",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Offline illustration region recoloring and annotation",
   "author": "Region Studio",
   "main": "main.cjs",
