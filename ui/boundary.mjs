@@ -19,9 +19,6 @@ export function selectBounded(input,w,h,points,edge,{strength=65,radius=35,gap=1
  if(!positives.length)return {mask:input.slice(),confidence:0,accepted:false};
  const barrier=barrierMap(edge,w,h,strength,gap),allowed=new Uint8Array(w*h),r=Math.max(8,Math.min(w,h)*radius/100),r2=r*r;
  for(const p of positives){const sx=p%w,sy=Math.floor(p/w);for(let y=Math.max(0,Math.ceil(sy-r));y<=Math.min(h-1,Math.floor(sy+r));y++)for(let x=Math.max(0,Math.ceil(sx-r));x<=Math.min(w-1,Math.floor(sx+r));x++)if((x-sx)**2+(y-sy)**2<=r2)allowed[y*w+x]=1;}
- // Exclusion seeds compete spatially with inclusion seeds at 1.1x weight.
- // Inclusion coordinates, radius and model prompts remain unchanged.
- if(negatives.size)for(let y=0;y<h;y++)for(let x=0;x<w;x++){const p=y*w+x;if(!allowed[p])continue;let positiveDistance=Infinity,negativeDistance=Infinity;for(const q of positives)positiveDistance=Math.min(positiveDistance,(x-q%w)**2+(y-Math.floor(q/w))**2);for(const q of negatives)negativeDistance=Math.min(negativeDistance,(x-q%w)**2+(y-Math.floor(q/w))**2);if(negativeDistance<=positiveDistance*(1.1*1.1))allowed[p]=0;}
  const queue=new Int32Array(w*h),seen=new Uint8Array(w*h);let head=0,tail=0,perimeter=0,sealed=0,touchesLimit=false;
  const push=p=>{if(!seen[p]&&allowed[p]&&!barrier[p]&&!negatives.has(p)&&(lineOnly||input[p])){seen[p]=1;queue[tail++]=p;out[p]=255;}};
  for(const p of positives){if(barrier[p]){for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++){const x=p%w+dx,y=Math.floor(p/w)+dy;if(x>=0&&x<w&&y>=0&&y<h)push(y*w+x);}}else push(p);}
@@ -34,4 +31,30 @@ export function smoothMask(mask,w,h,points,edge,amount=2){
  let field=Float32Array.from(mask,v=>v/255);const radius=clamp(Math.round(amount)+1,2,7),tmp=new Float32Array(mask.length);for(let pass=0;pass<2;pass++){for(let y=0;y<h;y++){let sum=0;for(let d=-radius;d<=radius;d++)sum+=field[y*w+clamp(d,0,w-1)];for(let x=0;x<w;x++){tmp[y*w+x]=sum/(2*radius+1);sum+=field[y*w+clamp(x+radius+1,0,w-1)]-field[y*w+clamp(x-radius,0,w-1)];}}for(let x=0;x<w;x++){let sum=0;for(let d=-radius;d<=radius;d++)sum+=tmp[clamp(d,0,h-1)*w+x];for(let y=0;y<h;y++){field[y*w+x]=sum/(2*radius+1);sum+=tmp[clamp(y+radius+1,0,h-1)*w+x]-tmp[clamp(y-radius,0,h-1)*w+x];}}}
  const out=Uint8Array.from(field,v=>v>=.5?255:0);for(let p=0;p<out.length;p++)if(edge[p]>220)out[p]=mask[p];for(const p of seeds(points,w,h,1))out[p]=255;for(const p of seeds(points,w,h,0))out[p]=0;return out;
 }
-export function mergeLocal(previous,next,w,h,point,radius=15){const out=previous.slice(),cx=point.x*w,cy=point.y*h,r=Math.max(8,Math.min(w,h)*Math.min(radius,15)/100);for(let y=Math.max(0,Math.floor(cy-r));y<Math.min(h,Math.ceil(cy+r));y++)for(let x=Math.max(0,Math.floor(cx-r));x<Math.min(w,Math.ceil(cx+r));x++)if((x-cx)**2+(y-cy)**2<=r*r)out[y*w+x]=point.label===0?Math.min(previous[y*w+x],next[y*w+x]):next[y*w+x];return out;}
+export function mergeLocal(previous,next,w,h,point,radius=15){const out=previous.slice(),cx=point.x*w,cy=point.y*h,r=Math.max(8,Math.min(w,h)*Math.min(radius,15)/100);for(let y=Math.max(0,Math.floor(cy-r));y<Math.min(h,Math.ceil(cy+r));y++)for(let x=Math.max(0,Math.floor(cx-r));x<Math.min(w,Math.ceil(cx+r));x++)if((x-cx)**2+(y-cy)**2<=r*r)out[y*w+x]=next[y*w+x];return out;}
+export function cutNegativeToBoundary(mask,w,h,point,edge,{strength=65,radius=35,gap=1,protectedPoints=[]}={}){
+ if(mask.length!==w*h||edge.length!==w*h)throw Error('마스크 크기 불일치');
+ const out=mask.slice(),barrier=barrierMap(edge,w,h,strength,gap),cx=clamp(Math.floor(point.x*w),0,w-1),cy=clamp(Math.floor(point.y*h),0,h-1),maxDistance=Math.max(8,Math.min(w,h)*radius/100);
+ const dirs=[[1,0],[Math.SQRT1_2,Math.SQRT1_2],[0,1],[-Math.SQRT1_2,Math.SQRT1_2],[-1,0],[-Math.SQRT1_2,-Math.SQRT1_2],[0,-1],[Math.SQRT1_2,-Math.SQRT1_2]];
+ const limits=new Float32Array(8);let nearest=Infinity;
+ for(let i=0;i<8;i++){const [dx,dy]=dirs[i];for(let step=1;step<=maxDistance;step++){const x=Math.round(cx+dx*step),y=Math.round(cy+dy*step);if(x<0||x>=w||y<0||y>=h){limits[i]=step-.5;break;}if(barrier[y*w+x]){limits[i]=step-.5;nearest=Math.min(nearest,step);break;}}}
+ const fallback=Math.min(maxDistance,Number.isFinite(nearest)?Math.max(8,nearest*1.25):Math.max(8,Math.min(w,h)*.04));for(let i=0;i<8;i++)if(!limits[i])limits[i]=fallback;
+ let seed=-1,best=Infinity;for(let dy=-3;dy<=3;dy++)for(let dx=-3;dx<=3;dx++){const x=cx+dx,y=cy+dy;if(x<0||x>=w||y<0||y>=h||barrier[y*w+x])continue;const d=dx*dx+dy*dy,score=d+(mask[y*w+x]?0:16);if(score<best){best=score;seed=y*w+x;}}
+ if(seed<0)return {mask:out,removed:0};
+ const protectedSeeds=protectedPoints.filter(p=>p.label===1).map(p=>[clamp(Math.floor(p.x*w),0,w-1),clamp(Math.floor(p.y*h),0,h-1)]);
+ const seen=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0,removed=0;
+ const push=p=>{if(p<0||seen[p]||barrier[p])return;const x=p%w,y=Math.floor(p/w),dx=x-cx,dy=y-cy,d=Math.hypot(dx,dy);if(d>maxDistance)return;let a=Math.atan2(dy,dx);if(a<0)a+=Math.PI*2;const sector=a*4/Math.PI,i=Math.floor(sector)%8,t=sector-Math.floor(sector),limit=limits[i]*(1-t)+limits[(i+1)%8]*t;if(d>limit)return;seen[p]=1;queue[tail++]=p;};
+ push(seed);while(head<tail){const p=queue[head++],x=p%w,y=Math.floor(p/w);if(out[p]){const negativeDistance=(x-cx)**2+(y-cy)**2,protectedHere=protectedSeeds.some(([px,py])=>(x-px)**2+(y-py)**2<=negativeDistance);if(!protectedHere){out[p]=0;removed++;}}if(x)push(p-1);if(x<w-1)push(p+1);if(y)push(p-w);if(y<h-1)push(p+w);}
+ return {mask:out,removed};
+}
+export function reconcileAnchors(mask,w,h,points,edge,options={}){
+ const positives=points.filter(p=>p.label===1),negatives=points.filter(p=>p.label===0);if(!positives.length)return {mask:mask.slice(),removed:0,unmatched:0};
+ let out=mask.slice(),removed=0;for(const point of negatives){const cut=cutNegativeToBoundary(out,w,h,point,edge,{...options,protectedPoints:positives});out=cut.mask;removed+=cut.removed;}
+ const barrier=barrierMap(edge,w,h,options.strength??65,options.gap??1),keep=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0,unmatched=0;
+ const push=p=>{if(!keep[p]&&out[p]&&!barrier[p]){keep[p]=1;queue[tail++]=p;}};
+ for(const point of positives){const cx=clamp(Math.floor(point.x*w),0,w-1),cy=clamp(Math.floor(point.y*h),0,h-1);let seed=-1,best=Infinity;for(let dy=-5;dy<=5;dy++)for(let dx=-5;dx<=5;dx++){const x=cx+dx,y=cy+dy;if(x<0||x>=w||y<0||y>=h)continue;const p=y*w+x,d=dx*dx+dy*dy;if(out[p]&&!barrier[p]&&d<best){seed=p;best=d;}}if(seed<0)unmatched++;else push(seed);}
+ if(!tail)return {mask:out,removed,unmatched};
+ while(head<tail){const p=queue[head++],x=p%w,y=Math.floor(p/w);if(x)push(p-1);if(x<w-1)push(p+1);if(y)push(p-w);if(y<h-1)push(p+w);}
+ for(let p=0;p<out.length;p++)if(out[p]&&!keep[p]){out[p]=0;removed++;}
+ return {mask:out,removed,unmatched};
+}
